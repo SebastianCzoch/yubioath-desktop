@@ -1,5 +1,6 @@
 import QtQuick 2.5
 import io.thp.pyotherside 1.4
+import "utils.js" as Utils
 
 
 // @disable-check M300
@@ -37,7 +38,7 @@ Python {
                 importModule('yubikey', function () {
                     yubikeyReady = true
                 })
-                importModule('logging_setup', function() {
+                importModule('logging_setup', function () {
                     loggingReady = true
                 })
             })
@@ -69,7 +70,7 @@ Python {
                 if (cb) {
                     try {
                         cb(json ? JSON.parse(json) : undefined)
-                    } catch(err) {
+                    } catch (err) {
                         console.log(err, json)
                     }
                 }
@@ -81,13 +82,14 @@ Python {
         do_call('yubikey.controller.count_devices', [], function (n) {
             nDevices = n
             if (nDevices == 1) {
-                do_call('yubikey.controller.refresh', [slotMode], function (dev) {
-                    name = dev ? dev.name : ''
-                    version = dev ? dev.version : null
-                    enabled = dev ? dev.enabled : []
-                    connections = dev ? dev.connections : []
-                    hasDevice = dev !== undefined && dev !== null
-                })
+                do_call('yubikey.controller.refresh', [slotMode],
+                        function (dev) {
+                            name = dev ? dev.name : ''
+                            version = dev ? dev.version : null
+                            enabled = dev ? dev.enabled : []
+                            connections = dev ? dev.connections : []
+                            hasDevice = dev !== undefined && dev !== null
+                        })
             } else if (hasDevice) {
                 // No longer has device
                 hasDevice = false
@@ -101,8 +103,8 @@ Python {
     function refreshCCIDCredentials(force) {
         var now = Math.floor(Date.now() / 1000)
         if (force || (validated && nextRefresh <= now)) {
-            do_call('yubikey.controller.refresh_credentials',
-                    [now], updateAllCredentials)
+            do_call('yubikey.controller.refresh_credentials', [now],
+                    updateAllCredentials)
         }
     }
 
@@ -127,8 +129,8 @@ Python {
 
     function promptOrSkip(prompt) {
         do_call('yubikey.controller.needs_validation', [], function (res) {
-	    if (res === true) {
-	        prompt.open()
+            if (res === true) {
+                prompt.open()
             } else {
                 validated = true
             }
@@ -153,12 +155,14 @@ Python {
                 minExpiration = entry.code.valid_to
             }
             // Touch credentials should only be replaced by user
-            if (credentialExists(entry.credential.key) && entry.credential.touch) {
+            if (credentialExists(entry.credential.key)
+                    && entry.credential.touch) {
                 result.push(getEntry(entry.credential.key))
                 continue
             }
             // HOTP credentials should only be replaced by user
-            if (credentialExists(entry.credential.key) && entry.credential.oath_type === 'HOTP') {
+            if (credentialExists(entry.credential.key)
+                    && entry.credential.oath_type === 'HOTP') {
                 result.push(getEntry(entry.credential.key))
                 continue
             }
@@ -178,7 +182,8 @@ Python {
         // the view will refresh even if objects are the same
         entries = result
         entries.sort(function (a, b) {
-            return getSortableName(a.credential).localeCompare(getSortableName(b.credential))
+            return getSortableName(a.credential).localeCompare(
+                        getSortableName(b.credential))
         })
 
         updateExpiration()
@@ -186,7 +191,9 @@ Python {
     }
 
     function getSortableName(credential) {
-        return (credential.issuer || '') + (credential.name || '') + '/' + (credential.period || '')
+        return (credential.issuer
+                || '') + (credential.name
+                          || '') + '/' + (credential.period || '')
     }
 
     function getEntry(key) {
@@ -206,6 +213,13 @@ Python {
             }
         }
         return false
+    }
+
+    function hasAnyNonTouchTotpCredential() {
+        return Utils.find(entries, function (entry) {
+            return !entry.credential.touch
+                    && entry.credential.oath_type === 'TOTP'
+        }) || false
     }
 
     function hasAnyCredentials() {
@@ -229,19 +243,25 @@ Python {
 
     function calculate(entry, copyAfterUpdate) {
         var now = Math.floor(Date.now() / 1000)
-        var margin = entry.credential.touch ? 10 : 0;
-        do_call('yubikey.controller.calculate', [entry.credential, now + margin],
-                function (code) {
-                    updateSingleCredential(entry.credential, code, copyAfterUpdate)
+        var margin = entry.credential.touch ? 10 : 0
+        do_call('yubikey.controller.calculate',
+                [entry.credential, now + margin], function (code) {
+                    updateSingleCredential(entry.credential, code,
+                                           copyAfterUpdate)
                 })
     }
 
     function calculateSlotMode(slot, digits, copyAfterUpdate, touch) {
         var now = Math.floor(Date.now() / 1000)
-        var margin = touch ? 10 : 0;
-        do_call('yubikey.controller.calculate_slot_mode', [slot, digits, now + margin],
-                function (entry) {
-                    updateSingleCredential(entry.credential, entry.code, copyAfterUpdate)
+        var margin = touch ? 10 : 0
+        do_call('yubikey.controller.calculate_slot_mode',
+                [slot, digits, now + margin], function (entry) {
+                    if (entry) {
+                        updateSingleCredential(entry.credential, entry.code,
+                                               copyAfterUpdate)
+                    } else {
+                        touchYourYubikey.close()
+                    }
                 })
     }
 
@@ -250,7 +270,7 @@ Python {
       right position in the credential list.
       */
     function updateSingleCredential(cred, code, copyAfterUpdate) {
-        var entry = null;
+        var entry = null
         for (var i = 0; i < entries.length; i++) {
             if (entries[i].credential.key === cred.key) {
                 entry = entries[i]
@@ -258,7 +278,7 @@ Python {
             }
         }
         if (!cred.touch) {
-          updateExpiration()
+            updateExpiration()
         }
         credentialsRefreshed()
         // Update the selected credential
@@ -272,8 +292,7 @@ Python {
 
     function addCredential(name, key, issuer, oathType, algo, digits, period, touch, cb) {
         do_call('yubikey.controller.add_credential',
-                [name, key, issuer, oathType, algo, digits, period, touch],
-                cb)
+                [name, key, issuer, oathType, algo, digits, period, touch], cb)
     }
 
     function addSlotCredential(slot, key, touch, cb) {
@@ -282,8 +301,7 @@ Python {
     }
 
     function deleteCredential(credential) {
-        do_call('yubikey.controller.delete_credential',
-                [credential])
+        do_call('yubikey.controller.delete_credential', [credential])
     }
 
     function deleteSlotCredential(slot) {
